@@ -1,0 +1,139 @@
+---
+title: "hw4"
+author: "Seongu Lee"
+date: "5/2/2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidymodels)
+#install.packages("ISLR")
+#install.packages("ISLR2")
+library(ISLR)
+library(ISLR2)
+library(tidyverse)
+```
+
+```{r}
+set.seed(731)
+titanic <- read.csv("C:/Users/sungu/OneDrive/Desktop/titanic.csv")
+titanic$survived = factor(titanic$survived,levels = c("Yes","No"))
+titanic$pclass = factor(titanic$pclass)
+
+split <- initial_split(titanic, prop = 0.80,strata = survived)
+train <- training(split)
+test<- testing(split)
+dim(test)
+dim(train)
+
+reciped <- recipe(survived ~ pclass+sex+age+sib_sp+parch+fare, data = train) %>% 
+  step_impute_linear(age) %>% 
+  step_dummy(all_nominal_predictors()) %>% 
+  step_interact(~ starts_with("sex"):fare) %>% 
+  step_interact(~ age:fare)
+reciped
+```
+# 2,
+
+```{r}
+fold <- vfold_cv(train, v = 10)
+fold
+
+```
+
+# 3.
+k-Fold Cross-Validation is a strategy to build more efficient model using selected data set. (from https://towardsdatascience.com/k-fold-cross-validation-explained-in-plain-english-659e33c0bc0)
+
+K-Fold cross- Validation has less biased results and less optimistic estimate of the model than simply fitting or entire training set. (From https://machinelearningmastery.com/k-fold-cross-validation/#:~:text=It%20is%20a%20popular%20method,a%20simple%20train%2Ftest%20split.)
+
+Validation set approach will be used for entire training set
+
+
+```{r}
+
+log_reg <- logistic_reg() %>% 
+  set_engine("glm") %>% 
+  set_mode("classification")
+```
+
+```{r}
+log_wkflow <- workflow() %>% 
+  add_model(log_reg) %>% 
+  add_recipe(reciped)
+```
+
+```{r}
+lin_mod <- discrim_linear() %>% 
+  set_mode("classification") %>% 
+  set_engine("MASS")
+```
+
+```{r}
+lin_wkflow <- workflow() %>% 
+  add_model(lin_mod) %>% 
+  add_recipe(reciped)
+```
+
+```{r}
+qd_mod <- discrim_quad() %>% 
+  set_mode("classification") %>% 
+  set_engine("MASS")
+```
+
+```{r}
+qd_wkflow <- workflow() %>% 
+  add_model(qd_mod) %>% 
+  add_recipe(reciped)
+```
+
+There are 10 folds and 3 models each. So 30 models will be total
+
+# 5.
+
+```{r,eval = FALSE}
+log_fit <- 
+  log_wkflow %>% 
+  fit_resamples(fold)
+
+lin_fit <- 
+  lin_wkflow %>% 
+  fit_resamples(fold)
+
+qd_fit <- 
+  qd_wkflow %>% 
+  fit_resamples(fold)
+```
+
+# 6.
+
+```{r,eval = FALSE}
+collect_metrics(log_fit)
+collect_metrics(lin_fit)
+collect_metrics(qd_fit)
+
+(0.790+0.790+0.767)/3
+```
+
+logistic regression has highest accuracy and lowest std err. 
+
+# 7.
+
+```{r}
+log_fit <- fit(log_wkflow, train)
+```
+
+# 8.
+
+```{r}
+log<- bind_cols(predict(log_fit, new_data = test), test%>%dplyr::select(survived))
+log_acc <- log %>%
+  accuracy(truth = survived, estimate = .pred_class)
+log_acc
+```
+
+Accuracy of the model with testing set is 0.8268. And the average accuracy for folds is 0.782. So the model is working better for the testing set. So, model performed well.
+
